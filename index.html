@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Terceirizados - Form teste</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:40px;max-width:640px}
+    form{display:grid;gap:14px}
+    label{display:grid;gap:6px}
+    input,button{padding:10px;font-size:16px}
+    .ok{color:green}.err{color:#b00}
+  </style>
+</head>
+<body>
+  <h1>Cadastro de Terceirizados (teste)</h1>
+
+  <form id="f">
+    <label>Nome
+      <input name="nome" required />
+    </label>
+    <label>CPF (11 dígitos, só números)
+      <input name="cpf" inputmode="numeric" pattern="\\d{11}" maxlength="11" required />
+    </label>
+    <label>PIS (11 dígitos, só números)
+      <input name="pis" inputmode="numeric" pattern="\\d{11}" maxlength="11" required />
+    </label>
+    <button type="submit">Enviar</button>
+  </form>
+
+  <p id="status"></p>
+
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script>
+    // === SUBSTITUA PELOS SEUS VALORES ===
+    const SUPABASE_URL = "https://SEU-PROJ.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const form = document.getElementById('f');
+    const status = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.textContent = "Enviando...";
+      status.className = "";
+      const fd = new FormData(form);
+      const data = Object.fromEntries(fd.entries());
+
+      // sanitiza: mantém só dígitos em CPF/PIS
+      data.cpf = (data.cpf || "").replace(/\\D/g, "");
+      data.pis = (data.pis || "").replace(/\\D/g, "");
+
+      const { error } = await sb.from('terceirizados').insert([data]);
+      if (error) {
+        status.textContent = "Erro: " + error.message;
+        status.className = "err";
+      } else {
+        status.textContent = "OK! Registro salvo.";
+        status.className = "ok";
+        form.reset();
+      }
+    });
+  </script>
+</body>
+</html>
