@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Terceirizados - Consulta</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:32px;max-width:960px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+  input,button{padding:10px;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin-top:8px}
+  th,td{border:1px solid #ddd;padding:8px;text-align:left}
+  th{background:#f5f5f5}
+  .muted{opacity:.7}
+  .err{color:#b00}
+</style>
+</head>
+<body>
+<h1>Consulta de Terceirizados</h1>
+
+<div class="row">
+  <input id="q" placeholder="Buscar por nome ou CPF (11 dígitos)" />
+  <button id="btn">Buscar</button>
+  <span id="status" class="muted"></span>
+</div>
+
+<table id="tbl">
+  <thead>
+    <tr>
+      <th>Nome</th>
+      <th>CPF</th>
+      <th>PIS</th>
+      <th>Criado em</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+  // === MESMOS VALORES DO FORM ===
+  const SUPABASE_URL = "https://wzucstbnqrmbylumrmit.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  const q = document.getElementById('q');
+  const btn = document.getElementById('btn');
+  const status = document.getElementById('status');
+  const tbody = document.querySelector('#tbl tbody');
+
+  function mask(s){ if(!s) return ""; return s.replace(/\D/g,"").replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*$/, "$1.$2.$3-$4"); }
+  function maskPis(s){ if(!s) return ""; return s.replace(/\D/g,"").replace(/^(\d{3})(\d{5})(\d{2})(\d{1}).*$/, "$1.$2.$3-$4"); }
+
+  async function load(){
+    status.textContent = "Carregando...";
+    tbody.innerHTML = "";
+
+    const term = (q.value||"").trim();
+    let query = sb.from('terceirizados')
+      .select('id,nome,cpf,pis,created_at')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if(term){
+      if(/^\d{11}$/.test(term)){ // busca por CPF exato (11 dígitos)
+        query = query.eq('cpf', term);
+      }else{
+        query = query.ilike('nome', `%${term}%`);
+      }
+    }
+
+    const { data, error } = await query;
+    if(error){
+      status.textContent = "Erro: " + error.message;
+      status.className = "err";
+      return;
+    }
+
+    status.textContent = `${data.length} registro(s)`;
+    status.className = "";
+
+    for(const r of data){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.nome||""}</td>
+        <td>${mask(r.cpf)}</td>
+        <td>${maskPis(r.pis)}</td>
+        <td>${new Date(r.created_at).toLocaleString()}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  btn.addEventListener('click', load);
+  q.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ load(); }});
+  load(); // inicial
+</script>
+</body>
+</html>
