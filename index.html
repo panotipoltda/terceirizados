@@ -1,70 +1,34 @@
-<!doctype html>
-<html lang="pt-br">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Terceirizados - Form teste</title>
-  <style>
-    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:40px;max-width:640px}
-    form{display:grid;gap:14px}
-    label{display:grid;gap:6px}
-    input,button{padding:10px;font-size:16px}
-    .ok{color:green}.err{color:#b00}
-  </style>
-</head>
-<body>
-  <h1>Cadastro de Terceirizados (teste)</h1>
+<script>
+  const sb = supabase.createClient(
+    "https://wzucstbnqrmbylumrmit.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg"
+  );
 
-  <form id="f">
-    <label>Nome
-      <input name="nome" required />
-    </label>
-    <label>CPF (11 dígitos, só números)
-      <input name="cpf" inputmode="numeric" pattern="\d{11}" maxlength="11" required />
-    </label>
-    <label>PIS (11 dígitos, só números)
-      <input name="pis" inputmode="numeric" pattern="\d{11}" maxlength="11" required />
-    </label>
-    <button type="submit">Enviar</button>
-  </form>
+  const form = document.getElementById('f');
+  const status = document.getElementById('status');
 
-  <p id="status"></p>
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    status.textContent = "Enviando...";
+    status.className = "";
 
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script>
-    // === SEUS VALORES (entre aspas) ===
-    const SUPABASE_URL = "https://wzucstbnqrmbylumrmit.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
+    const data = Object.fromEntries(new FormData(form).entries());
+    data.cpf = (data.cpf || "").replace(/\D/g, "");
+    data.pis = (data.pis || "").replace(/\D/g, "");
 
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    const form = document.getElementById('f');
-    const status = document.getElementById('status');
+    const { data: res, error, status: http } = await sb
+      .from('terceirizados')
+      .insert([data]); // sem .select()
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      status.textContent = "Enviando...";
-      status.className = "";
+    console.log({ http, res, error });
 
-      const data = Object.fromEntries(new FormData(form).entries());
-      data.cpf = (data.cpf || "").replace(/\D/g, "");
-      data.pis = (data.pis || "").replace(/\D/g, "");
-
-      const { data: inserted, error } = await sb
-        .from('terceirizados')
-        .insert([data])
-        .select('id, nome, cpf, pis, created_at')
-        .single();
-
-      if (error) {
-        console.error(error);
-        status.textContent = "Erro: " + error.message;
-        status.className = "err";
-        return;
-      }
-      status.textContent = "OK! ID: " + inserted.id;
-      status.className = "ok";
-      form.reset();
-    });
-  </script>
-</body>
-</html>
+    if (error) {
+      status.textContent = `Erro: ${error.message}`;
+      status.className = "err";
+      return;
+    }
+    status.textContent = `OK (HTTP ${http}). Registro salvo.`;
+    status.className = "ok";
+    form.reset();
+  });
+</script>
