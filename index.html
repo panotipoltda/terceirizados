@@ -33,8 +33,8 @@
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script>
     // === SUBSTITUA PELOS SEUS VALORES ===
-    const SUPABASE_URL = "https://SEU-PROJ.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
+    const SUPABASE_URL = postgresql://postgres:LS1MMfhKgUAQbqZg@db.wzucstbnqrmbylumrmit.supabase.co:5432/postgres;
+    const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
 
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const form = document.getElementById('f');
