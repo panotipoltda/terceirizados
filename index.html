@@ -48,8 +48,8 @@
       const data = Object.fromEntries(fd.entries());
 
       // sanitiza: mantém só dígitos em CPF/PIS
-      data.cpf = (data.cpf || "").replace(/\\D/g, "");
-      data.pis = (data.pis || "").replace(/\\D/g, "");
+      data.cpf = (data.cpf || "").replace(/\D/g, "");
+      data.pis = (data.pis || "").replace(/\D/g, "");
 
       const { error } = await sb.from('terceirizados').insert([data]);
       if (error) {
