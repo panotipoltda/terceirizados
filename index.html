@@ -32,9 +32,9 @@
 
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script>
-    // === SUBSTITUA PELOS SEUS VALORES ===
-    const SUPABASE_URL = https://wzucstbnqrmbylumrmit.supabase.co;
-    const SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
+    // === SEUS VALORES (entre aspas) ===
+    const SUPABASE_URL = "https://wzucstbnqrmbylumrmit.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
 
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const form = document.getElementById('f');
@@ -44,22 +44,26 @@
       e.preventDefault();
       status.textContent = "Enviando...";
       status.className = "";
-      const fd = new FormData(form);
-      const data = Object.fromEntries(fd.entries());
 
-      // sanitiza: mantém só dígitos em CPF/PIS
+      const data = Object.fromEntries(new FormData(form).entries());
       data.cpf = (data.cpf || "").replace(/\D/g, "");
       data.pis = (data.pis || "").replace(/\D/g, "");
 
-      const { error } = await sb.from('terceirizados').insert([data]);
+      const { data: inserted, error } = await sb
+        .from('terceirizados')
+        .insert([data])
+        .select('id, nome, cpf, pis, created_at')
+        .single();
+
       if (error) {
+        console.error(error);
         status.textContent = "Erro: " + error.message;
         status.className = "err";
-      } else {
-        status.textContent = "OK! Registro salvo.";
-        status.className = "ok";
-        form.reset();
+        return;
       }
+      status.textContent = "OK! ID: " + inserted.id;
+      status.className = "ok";
+      form.reset();
     });
   </script>
 </body>
