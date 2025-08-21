@@ -3,20 +3,23 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Terceirizados — Cadastro & Consulta</title>
+<title>Terceirizados — Cadastro, Consulta e Alertas</title>
 <style>
-  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:32px;max-width:960px}
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:32px;max-width:1000px}
   .tabs{display:flex;gap:8px;margin-bottom:12px}
   .tabs button{padding:10px 14px;border:1px solid #ddd;background:#f6f6f6;cursor:pointer}
   .tabs button.active{background:#fff;border-bottom-color:#fff}
   .card{border:1px solid #ddd;padding:16px}
   form{display:grid;gap:12px;max-width:520px}
   label{display:grid;gap:6px}
-  input,button{padding:10px;font-size:14px}
+  input,button,select{padding:10px;font-size:14px}
   .ok{color:green}.err{color:#b00}.muted{opacity:.7}
   table{width:100%;border-collapse:collapse;margin-top:10px}
   th,td{border:1px solid #eee;padding:8px;text-align:left}
   th{background:#fafafa}
+  .pill{display:inline-block;padding:.2rem .5rem;border-radius:999px;font-size:.8rem}
+  .danger{background:#fee;border:1px solid #fbb;color:#900}
+  .warn{background:#fff8e1;border:1px solid #ffe08a;color:#7a4}
 </style>
 </head>
 <body>
@@ -25,8 +28,10 @@
 <div class="tabs">
   <button id="tab-cad" class="active">Cadastrar</button>
   <button id="tab-cons">Consultar</button>
+  <button id="tab-alert">Alertas</button>
 </div>
 
+<!-- CADASTRO -->
 <div id="view-cad" class="card">
   <h2>Cadastro</h2>
   <form id="f" novalidate>
@@ -47,16 +52,44 @@
   <p id="status"></p>
 </div>
 
+<!-- CONSULTA -->
 <div id="view-cons" class="card" style="display:none">
   <h2>Consulta</h2>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
     <input id="q" placeholder="Buscar por nome ou CPF (11 dígitos)" />
+    <select id="filtroAso">
+      <option value="todos">ASO: Todos</option>
+      <option value="vencidos">ASO: Vencidos</option>
+      <option value="em30">ASO: vencem em 30 dias</option>
+    </select>
     <button id="btn-buscar">Buscar</button>
     <span id="status-list" class="muted"></span>
   </div>
   <table id="tbl">
     <thead>
-      <tr><th>Nome</th><th>CPF</th><th>PIS</th><th>ASO</th><th>Criado em</th></tr>
+      <tr><th>Nome</th><th>CPF</th><th>PIS</th><th>ASO</th><th>Validade</th><th>Status</th><th>Criado em</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<!-- ALERTAS -->
+<div id="view-alert" class="card" style="display:none">
+  <h2>Alertas de ASO</h2>
+  <p class="muted">Regra: ASO válido por 1 ano a partir da data do exame.</p>
+
+  <h3>Vencidos</h3>
+  <table id="tbl-exp">
+    <thead>
+      <tr><th>Nome</th><th>CPF</th><th>ASO</th><th>Validade</th><th>Dias em atraso</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h3 style="margin-top:18px">Vencem em 30 dias</h3>
+  <table id="tbl-30">
+    <thead>
+      <tr><th>Nome</th><th>CPF</th><th>ASO</th><th>Validade</th><th>Faltam (dias)</th></tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -64,58 +97,148 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
+  // === SEUS VALORES ===
   const SUPABASE_URL = "https://wzucstbnqrmbylumrmit.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // Tabs
-  const cadBtn=document.getElementById('tab-cad'), consBtn=document.getElementById('tab-cons');
-  const vCad=document.getElementById('view-cad'), vCons=document.getElementById('view-cons');
-  function show(view){ vCad.style.display=view==='cad'?'':'none'; vCons.style.display=view==='cons'?'':'none';
-    cadBtn.classList.toggle('active',view==='cad'); consBtn.classList.toggle('active',view==='cons');
-    if(view==='cons') load(); }
-  cadBtn.onclick=()=>show('cad'); consBtn.onclick=()=>show('cons');
+  // ==== Utils
+  const addDays = (d, n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+  const fmtISO = d => new Date(d).toISOString().slice(0,10);
+  const fmtBR  = d => new Date(d).toLocaleDateString();
+  const difDias = (a,b)=> Math.round((a-b)/(1000*60*60*24));
+  const maskCPF = s => (s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*$/,"$1.$2.$3-$4");
 
-  // Cadastro
-  const form=document.getElementById('f'), statusEl=document.getElementById('status');
-  form.addEventListener('submit',async e=>{
+  // ==== Tabs
+  const cadBtn = document.getElementById('tab-cad');
+  const consBtn = document.getElementById('tab-cons');
+  const alertBtn= document.getElementById('tab-alert');
+  const vCad = document.getElementById('view-cad');
+  const vCons= document.getElementById('view-cons');
+  const vAlert=document.getElementById('view-alert');
+  function show(view){
+    vCad.style.display  = view==='cad'?'':'none';
+    vCons.style.display = view==='cons'?'':'none';
+    vAlert.style.display= view==='alert'?'':'none';
+    cadBtn.classList.toggle('active', view==='cad');
+    consBtn.classList.toggle('active', view==='cons');
+    alertBtn.classList.toggle('active', view==='alert');
+    if(view==='cons') loadList();
+    if(view==='alert') loadAlerts();
+  }
+  cadBtn.onclick = ()=>show('cad');
+  consBtn.onclick = ()=>show('cons');
+  alertBtn.onclick= ()=>show('alert');
+
+  // ==== Cadastro
+  const form = document.getElementById('f');
+  const statusEl = document.getElementById('status');
+  form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     statusEl.textContent="Enviando..."; statusEl.className="";
-    const data=Object.fromEntries(new FormData(form).entries());
+    const data = Object.fromEntries(new FormData(form).entries());
     data.nome=(data.nome||"").trim();
-    data.cpf=(data.cpf||"").replace(/\D/g,"");
-    data.pis=(data.pis||"").replace(/\D/g,"");
-    if(!data.nome||!/^\d{11}$/.test(data.cpf)||!/^\d{11}$/.test(data.pis)||!data.aso_date){
+    data.cpf =(data.cpf ||"").replace(/\D/g,"");
+    data.pis =(data.pis ||"").replace(/\D/g,"");
+    if(!data.nome || !/^\d{11}$/.test(data.cpf) || !/^\d{11}$/.test(data.pis) || !data.aso_date){
       statusEl.textContent="Erro: verifique os campos."; statusEl.className="err"; return;
     }
-    const {error,status}=await sb.from('terceirizados').insert([data]);
-    if(error){statusEl.textContent="Erro: "+error.message;statusEl.className="err";return;}
-    statusEl.textContent=`OK (HTTP ${status}). Registro salvo.`;statusEl.className="ok";form.reset();
+    const { error, status } = await sb.from('terceirizados').insert([data]);
+    if(error){ statusEl.textContent="Erro: "+error.message; statusEl.className="err"; return; }
+    statusEl.textContent=`OK (HTTP ${status}). Registro salvo.`; statusEl.className="ok"; form.reset();
   });
 
-  // Consulta
-  const q=document.getElementById('q'), btnBuscar=document.getElementById('btn-buscar'),
-        statusList=document.getElementById('status-list'), tbody=document.querySelector('#tbl tbody');
+  // ==== Consulta
+  const q = document.getElementById('q'), filtroAso=document.getElementById('filtroAso');
+  const btnBuscar=document.getElementById('btn-buscar');
+  const statusList=document.getElementById('status-list');
+  const tbody=document.querySelector('#tbl tbody');
 
-  function maskCPF(s){return(s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*$/,"$1.$2.$3-$4");}
-  function maskPIS(s){return(s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{5})(\d{2})(\d{1}).*$/,"$1.$2.$3-$4");}
+  function statusASO(asoDate){
+    if(!asoDate) return ["—",""];
+    const valid = addDays(asoDate, 365);
+    const hoje = new Date();
+    if(valid < hoje) return ["Vencido", '<span class="pill danger">Vencido</span>'];
+    if(valid <= addDays(hoje,30)) return ["A vencer", '<span class="pill warn">Vence em 30d</span>'];
+    return ["OK",""];
+  }
 
-  async function load(){
+  async function loadList(){
     statusList.textContent="Carregando..."; tbody.innerHTML="";
     const term=(q.value||"").trim();
-    let query=sb.from('terceirizados').select('id,nome,cpf,pis,aso_date,created_at').order('created_at',{ascending:false}).limit(200);
-    if(term){ if(/^\d{11}$/.test(term)) query=query.eq('cpf',term); else query=query.ilike('nome',`%${term}%`); }
-    const {data,error}=await query;
-    if(error){statusList.textContent="Erro: "+error.message;statusList.className="err";return;}
-    statusList.textContent=`${data.length} registro(s)`;statusList.className="";
+    const hoje = new Date(), isoHoje = fmtISO(hoje), iso30 = fmtISO(addDays(hoje,30));
+    let query = sb.from('terceirizados')
+      .select('id,nome,cpf,pis,aso_date,created_at')
+      .order('created_at',{ascending:false}).limit(500);
+
+    if(term){
+      if(/^\d{11}$/.test(term)) query = query.eq('cpf', term);
+      else query = query.ilike('nome', `%${term}%`);
+    }
+    // filtro por status
+    if(filtroAso.value==='vencidos'){
+      query = query.lt('aso_date', fmtISO(addDays(hoje,-365)));
+    }else if(filtroAso.value==='em30'){
+      query = query.gte('aso_date', fmtISO(addDays(hoje,-365)))
+                   .lte('aso_date', fmtISO(addDays(hoje,-335))); // entre -365 e -335 dias
+    }
+
+    const { data, error } = await query;
+    if(error){ statusList.textContent="Erro: "+error.message; statusList.className="err"; return; }
+    statusList.textContent=`${data.length} registro(s)`; statusList.className="";
     for(const r of data){
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td>${r.nome||""}</td><td>${maskCPF(r.cpf)}</td><td>${maskPIS(r.pis)}</td><td>${r.aso_date||""}</td><td>${new Date(r.created_at).toLocaleDateString()}</td>`;
+      const valid = addDays(r.aso_date, 365);
+      const [label, pillHTML] = statusASO(r.aso_date);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.nome||""}</td>
+        <td>${maskCPF(r.cpf)}</td>
+        <td>${r.pis}</td>
+        <td>${r.aso_date||""}</td>
+        <td>${fmtBR(valid)}</td>
+        <td>${pillHTML}</td>
+        <td>${new Date(r.created_at).toLocaleDateString()}</td>`;
       tbody.appendChild(tr);
     }
   }
-  btnBuscar.onclick=load; q.addEventListener('keydown',e=>{if(e.key==='Enter') load();});
+  btnBuscar.onclick = loadList;
+  q.addEventListener('keydown',e=>{ if(e.key==='Enter') loadList(); });
+  filtroAso.addEventListener('change', loadList);
 
+  // ==== Alertas
+  const tbodyExp = document.querySelector('#tbl-exp tbody');
+  const tbody30  = document.querySelector('#tbl-30 tbody');
+
+  async function loadAlerts(){
+    tbodyExp.innerHTML=""; tbody30.innerHTML="";
+    const { data, error } = await sb.from('terceirizados')
+      .select('id,nome,cpf,aso_date')
+      .not('aso_date','is',null)
+      .limit(1000);
+    if(error){ alert("Erro: "+error.message); return; }
+
+    const hoje = new Date();
+    for(const r of data){
+      const aso = new Date(r.aso_date);
+      const venc = addDays(aso, 365);
+      const dd = difDias(venc, hoje);
+
+      // vencidos
+      if (venc < hoje){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `<td>${r.nome}</td><td>${maskCPF(r.cpf)}</td><td>${fmtBR(aso)}</td><td>${fmtBR(venc)}</td><td>${-dd}</td>`;
+        tbodyExp.appendChild(tr);
+      }
+      // a vencer em 30 dias
+      else if (dd <= 30){
+        const tr=document.createElement('tr');
+        tr.innerHTML = `<td>${r.nome}</td><td>${maskCPF(r.cpf)}</td><td>${fmtBR(aso)}</td><td>${fmtBR(venc)}</td><td>${dd}</td>`;
+        tbody30.appendChild(tr);
+      }
+    }
+  }
+
+  // start
   show('cad');
 </script>
 </body>
