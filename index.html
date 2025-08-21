@@ -1,113 +1,141 @@
 <!doctype html>
 <html lang="pt-br">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Terceirizados - Form teste</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:40px;max-width:720px}
-    form{display:grid;gap:14px}
-    label{display:grid;gap:6px}
-    input,button{padding:10px;font-size:16px}
-    button{cursor:pointer}
-    .ok{color:green}.err{color:#b00}
-    pre{background:#0001;padding:10px;border-radius:8px;white-space:pre-wrap}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Terceirizados — Cadastro & Consulta</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:32px;max-width:960px}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tabs button{padding:10px 14px;border:1px solid #ddd;background:#f6f6f6;cursor:pointer}
+  .tabs button.active{background:#fff;border-bottom-color:#fff}
+  .card{border:1px solid #ddd;padding:16px}
+  form{display:grid;gap:12px;max-width:520px}
+  label{display:grid;gap:6px}
+  input,button{padding:10px;font-size:14px}
+  .ok{color:green}.err{color:#b00}.muted{opacity:.7}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th,td{border:1px solid #eee;padding:8px;text-align:left}
+  th{background:#fafafa}
+</style>
 </head>
 <body>
-  <h1>Cadastro de Terceirizados (teste)</h1>
+<h1>Terceirizados</h1>
 
+<div class="tabs">
+  <button id="tab-cad" class="active">Cadastrar</button>
+  <button id="tab-cons">Consultar</button>
+</div>
+
+<div id="view-cad" class="card">
+  <h2>Cadastro</h2>
   <form id="f" novalidate>
     <label>Nome
       <input name="nome" required />
     </label>
-    <label>CPF (11 dígitos, só números)
+    <label>CPF (11 dígitos)
       <input name="cpf" inputmode="numeric" pattern="\d{11}" maxlength="11" required />
     </label>
-    <label>PIS (11 dígitos, só números)
+    <label>PIS (11 dígitos)
       <input name="pis" inputmode="numeric" pattern="\d{11}" maxlength="11" required />
     </label>
     <button type="submit">Enviar</button>
   </form>
-
   <p id="status"></p>
-  <pre id="debug" hidden></pre>
+</div>
 
-  <!-- supabase-js -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script>
-    // === SUBSTITUA PELOS DO SEU PROJETO ===
-    const SUPABASE_URL = "https://wzucstbnqrmbylumrmit.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
+<div id="view-cons" class="card" style="display:none">
+  <h2>Consulta</h2>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <input id="q" placeholder="Buscar por nome ou CPF (11 dígitos)" />
+    <button id="btn-buscar">Buscar</button>
+    <span id="status-list" class="muted"></span>
+  </div>
+  <table id="tbl">
+    <thead>
+      <tr><th>Nome</th><th>CPF</th><th>PIS</th><th>Criado em</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
 
-    // ======= Cliente Supabase
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+  // === MESMOS VALORES DO SEU PROJETO ===
+  const SUPABASE_URL = "https://wzucstbnqrmbylumrmit.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const form = document.getElementById('f');
-    const statusEl = document.getElementById('status');
-    const debugEl = document.getElementById('debug');
+  // Tabs
+  const cadBtn = document.getElementById('tab-cad');
+  const consBtn = document.getElementById('tab-cons');
+  const vCad   = document.getElementById('view-cad');
+  const vCons  = document.getElementById('view-cons');
+  function show(view){
+    vCad.style.display  = view==='cad' ? '' : 'none';
+    vCons.style.display = view==='cons'? '' : 'none';
+    cadBtn.classList.toggle('active', view==='cad');
+    consBtn.classList.toggle('active', view==='cons');
+    if(view==='cons') load(); // carrega lista ao abrir
+  }
+  cadBtn.onclick = ()=>show('cad');
+  consBtn.onclick = ()=>show('cons');
 
-    // Validação simples antes de enviar
-    function validate(data){
-      const errs = [];
-      if(!data.nome?.trim()) errs.push("Nome é obrigatório.");
-      if(!/^\d{11}$/.test(data.cpf)) errs.push("CPF deve ter 11 dígitos numéricos.");
-      if(!/^\d{11}$/.test(data.pis)) errs.push("PIS deve ter 11 dígitos numéricos.");
-      return errs;
+  // Cadastro
+  const form = document.getElementById('f');
+  const statusEl = document.getElementById('status');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    statusEl.textContent = "Enviando...";
+    statusEl.className = "";
+    const data = Object.fromEntries(new FormData(form).entries());
+    data.nome = (data.nome||"").trim();
+    data.cpf  = (data.cpf ||"").replace(/\D/g,"");
+    data.pis  = (data.pis ||"").replace(/\D/g,"");
+    if(!data.nome || !/^\d{11}$/.test(data.cpf) || !/^\d{11}$/.test(data.pis)){
+      statusEl.textContent = "Erro: verifique os campos.";
+      statusEl.className = "err"; return;
     }
+    const { error, status } = await sb.from('terceirizados').insert([data]);
+    if(error){ statusEl.textContent = "Erro: " + error.message; statusEl.className="err"; return; }
+    statusEl.textContent = `OK (HTTP ${status}). Registro salvo.`; statusEl.className="ok"; form.reset();
+  });
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      statusEl.textContent = "Enviando...";
-      statusEl.className = "";
-      debugEl.hidden = true;
+  // Consulta
+  const q = document.getElementById('q');
+  const btnBuscar = document.getElementById('btn-buscar');
+  const statusList = document.getElementById('status-list');
+  const tbody = document.querySelector('#tbl tbody');
 
-      // Coleta e sanitiza
-      const data = Object.fromEntries(new FormData(form).entries());
-      data.nome = (data.nome || "").trim();
-      data.cpf  = (data.cpf  || "").replace(/\D/g, "");
-      data.pis  = (data.pis  || "").replace(/\D/g, "");
+  function maskCPF(s){ return (s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*$/, "$1.$2.$3-$4"); }
+  function maskPIS(s){ return (s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{5})(\d{2})(\d{1}).*$/, "$1.$2.$3-$4"); }
 
-      // Validação
-      const errs = validate(data);
-      if (errs.length){
-        statusEl.textContent = "Erro: " + errs.join(" ");
-        statusEl.className = "err";
-        return;
-      }
+  async function load(){
+    statusList.textContent = "Carregando...";
+    tbody.innerHTML = "";
+    const term = (q.value||"").trim();
+    let query = sb.from('terceirizados')
+      .select('id,nome,cpf,pis,created_at')
+      .order('created_at', { ascending:false })
+      .limit(200);
+    if(term){
+      if(/^\d{11}$/.test(term)) query = query.eq('cpf', term);
+      else query = query.ilike('nome', `%${term}%`);
+    }
+    const { data, error } = await query;
+    if(error){ statusList.textContent = "Erro: "+error.message; statusList.className="err"; return; }
+    statusList.textContent = `${data.length} registro(s)`; statusList.className="";
+    for(const r of data){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.nome||""}</td><td>${maskCPF(r.cpf)}</td><td>${maskPIS(r.pis)}</td><td>${new Date(r.created_at).toLocaleString()}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  btnBuscar.onclick = load;
+  q.addEventListener('keydown', e=>{ if(e.key==='Enter') load(); });
 
-      try {
-        // INSERT (sem .select() pra evitar necessidade de policy de SELECT)
-        const { data: inserted, error, status } = await sb
-          .from('terceirizados')
-          .insert([data]);
-
-        // Log detalhado pra debug
-        debugEl.hidden = false;
-        debugEl.textContent = JSON.stringify({ http: status, inserted, error }, null, 2);
-
-        if (error) {
-          statusEl.textContent = "Erro: " + (error.message || "falha no insert");
-          statusEl.className = "err";
-          return;
-        }
-
-        statusEl.textContent = `OK (HTTP ${status}). Registro salvo.`;
-        statusEl.className = "ok";
-        form.reset();
-
-      } catch (err) {
-        statusEl.textContent = "Erro de rede: " + err.message;
-        statusEl.className = "err";
-        debugEl.hidden = false;
-        debugEl.textContent = String(err?.stack || err);
-      }
-    });
-
-    // Dica útil no console
-    console.log("Página servida de:", location.protocol, location.host);
-    console.log("Supabase URL:", SUPABASE_URL);
-  </script>
+  // Inicial
+  show('cad');
+</script>
 </body>
 </html>
