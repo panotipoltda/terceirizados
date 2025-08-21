@@ -39,6 +39,9 @@
     <label>PIS (11 dígitos)
       <input name="pis" inputmode="numeric" pattern="\d{11}" maxlength="11" required />
     </label>
+    <label>ASO (data)
+      <input name="aso_date" type="date" required />
+    </label>
     <button type="submit">Enviar</button>
   </form>
   <p id="status"></p>
@@ -53,7 +56,7 @@
   </div>
   <table id="tbl">
     <thead>
-      <tr><th>Nome</th><th>CPF</th><th>PIS</th><th>Criado em</th></tr>
+      <tr><th>Nome</th><th>CPF</th><th>PIS</th><th>ASO</th><th>Criado em</th></tr>
     </thead>
     <tbody></tbody>
   </table>
@@ -61,80 +64,58 @@
 
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <script>
-  // === MESMOS VALORES DO SEU PROJETO ===
   const SUPABASE_URL = "https://wzucstbnqrmbylumrmit.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind6dWNzdGJucXJtYnlsdW1ybWl0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MzMzNzQsImV4cCI6MjA3MTMwOTM3NH0.FSl33Em1Ri3mPwsIY1yaangNdAnqLAXOFf6bH9e1Ibg";
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // Tabs
-  const cadBtn = document.getElementById('tab-cad');
-  const consBtn = document.getElementById('tab-cons');
-  const vCad   = document.getElementById('view-cad');
-  const vCons  = document.getElementById('view-cons');
-  function show(view){
-    vCad.style.display  = view==='cad' ? '' : 'none';
-    vCons.style.display = view==='cons'? '' : 'none';
-    cadBtn.classList.toggle('active', view==='cad');
-    consBtn.classList.toggle('active', view==='cons');
-    if(view==='cons') load(); // carrega lista ao abrir
-  }
-  cadBtn.onclick = ()=>show('cad');
-  consBtn.onclick = ()=>show('cons');
+  const cadBtn=document.getElementById('tab-cad'), consBtn=document.getElementById('tab-cons');
+  const vCad=document.getElementById('view-cad'), vCons=document.getElementById('view-cons');
+  function show(view){ vCad.style.display=view==='cad'?'':'none'; vCons.style.display=view==='cons'?'':'none';
+    cadBtn.classList.toggle('active',view==='cad'); consBtn.classList.toggle('active',view==='cons');
+    if(view==='cons') load(); }
+  cadBtn.onclick=()=>show('cad'); consBtn.onclick=()=>show('cons');
 
   // Cadastro
-  const form = document.getElementById('f');
-  const statusEl = document.getElementById('status');
-  form.addEventListener('submit', async (e) => {
+  const form=document.getElementById('f'), statusEl=document.getElementById('status');
+  form.addEventListener('submit',async e=>{
     e.preventDefault();
-    statusEl.textContent = "Enviando...";
-    statusEl.className = "";
-    const data = Object.fromEntries(new FormData(form).entries());
-    data.nome = (data.nome||"").trim();
-    data.cpf  = (data.cpf ||"").replace(/\D/g,"");
-    data.pis  = (data.pis ||"").replace(/\D/g,"");
-    if(!data.nome || !/^\d{11}$/.test(data.cpf) || !/^\d{11}$/.test(data.pis)){
-      statusEl.textContent = "Erro: verifique os campos.";
-      statusEl.className = "err"; return;
+    statusEl.textContent="Enviando..."; statusEl.className="";
+    const data=Object.fromEntries(new FormData(form).entries());
+    data.nome=(data.nome||"").trim();
+    data.cpf=(data.cpf||"").replace(/\D/g,"");
+    data.pis=(data.pis||"").replace(/\D/g,"");
+    if(!data.nome||!/^\d{11}$/.test(data.cpf)||!/^\d{11}$/.test(data.pis)||!data.aso_date){
+      statusEl.textContent="Erro: verifique os campos."; statusEl.className="err"; return;
     }
-    const { error, status } = await sb.from('terceirizados').insert([data]);
-    if(error){ statusEl.textContent = "Erro: " + error.message; statusEl.className="err"; return; }
-    statusEl.textContent = `OK (HTTP ${status}). Registro salvo.`; statusEl.className="ok"; form.reset();
+    const {error,status}=await sb.from('terceirizados').insert([data]);
+    if(error){statusEl.textContent="Erro: "+error.message;statusEl.className="err";return;}
+    statusEl.textContent=`OK (HTTP ${status}). Registro salvo.`;statusEl.className="ok";form.reset();
   });
 
   // Consulta
-  const q = document.getElementById('q');
-  const btnBuscar = document.getElementById('btn-buscar');
-  const statusList = document.getElementById('status-list');
-  const tbody = document.querySelector('#tbl tbody');
+  const q=document.getElementById('q'), btnBuscar=document.getElementById('btn-buscar'),
+        statusList=document.getElementById('status-list'), tbody=document.querySelector('#tbl tbody');
 
-  function maskCPF(s){ return (s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*$/, "$1.$2.$3-$4"); }
-  function maskPIS(s){ return (s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{5})(\d{2})(\d{1}).*$/, "$1.$2.$3-$4"); }
+  function maskCPF(s){return(s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{3})(\d{3})(\d{2}).*$/,"$1.$2.$3-$4");}
+  function maskPIS(s){return(s||"").replace(/\D/g,"").replace(/^(\d{3})(\d{5})(\d{2})(\d{1}).*$/,"$1.$2.$3-$4");}
 
   async function load(){
-    statusList.textContent = "Carregando...";
-    tbody.innerHTML = "";
-    const term = (q.value||"").trim();
-    let query = sb.from('terceirizados')
-      .select('id,nome,cpf,pis,created_at')
-      .order('created_at', { ascending:false })
-      .limit(200);
-    if(term){
-      if(/^\d{11}$/.test(term)) query = query.eq('cpf', term);
-      else query = query.ilike('nome', `%${term}%`);
-    }
-    const { data, error } = await query;
-    if(error){ statusList.textContent = "Erro: "+error.message; statusList.className="err"; return; }
-    statusList.textContent = `${data.length} registro(s)`; statusList.className="";
+    statusList.textContent="Carregando..."; tbody.innerHTML="";
+    const term=(q.value||"").trim();
+    let query=sb.from('terceirizados').select('id,nome,cpf,pis,aso_date,created_at').order('created_at',{ascending:false}).limit(200);
+    if(term){ if(/^\d{11}$/.test(term)) query=query.eq('cpf',term); else query=query.ilike('nome',`%${term}%`); }
+    const {data,error}=await query;
+    if(error){statusList.textContent="Erro: "+error.message;statusList.className="err";return;}
+    statusList.textContent=`${data.length} registro(s)`;statusList.className="";
     for(const r of data){
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${r.nome||""}</td><td>${maskCPF(r.cpf)}</td><td>${maskPIS(r.pis)}</td><td>${new Date(r.created_at).toLocaleString()}</td>`;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${r.nome||""}</td><td>${maskCPF(r.cpf)}</td><td>${maskPIS(r.pis)}</td><td>${r.aso_date||""}</td><td>${new Date(r.created_at).toLocaleDateString()}</td>`;
       tbody.appendChild(tr);
     }
   }
-  btnBuscar.onclick = load;
-  q.addEventListener('keydown', e=>{ if(e.key==='Enter') load(); });
+  btnBuscar.onclick=load; q.addEventListener('keydown',e=>{if(e.key==='Enter') load();});
 
-  // Inicial
   show('cad');
 </script>
 </body>
